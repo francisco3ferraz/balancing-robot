@@ -1,15 +1,17 @@
 #include <Arduino.h>
+#include <Wire.h>
 
-#define LED_BUILTIN 2
+#define SDA_PIN 21
+#define SDL_PIN 22
 
 void setup() {
     Serial.begin(115200);
-    pinMode(LED_BUILTIN, OUTPUT);
+    delay(1000);
+    Wire.begin(SDA_PIN, SDL_PIN);
 }
 
 void loop() {
-    digitalWrite (LED_BUILTIN, HIGH);	// turn on the LED
-    delay(500);	// wait for half a second or 500 milliseconds
-    digitalWrite (LED_BUILTIN, LOW);	// turn off the LED
-    delay(500);	// wait for half a second or 500 milliseconds
+    Wire.beginTransmission(0x68);
+    Serial.printf("%d\n", Wire.endTransmission());
+    delay(1000);
 }
