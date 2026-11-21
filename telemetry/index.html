@@ -9,13 +9,18 @@
 <style>
   body { font-family: system-ui, sans-serif; margin: 16px; background: #fff; color: #222; }
   h1 { font-size: 1.2rem; margin: 0 0 8px; }
-  #status { font-family: ui-monospace, monospace; font-size: 0.9rem; margin-bottom: 8px; }
+  #bar { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+  #status { font-family: ui-monospace, monospace; font-size: 0.9rem; }
+  #pause { font: inherit; padding: 2px 12px; }
   #status.down { color: #c0392b; }
 </style>
 </head>
 <body>
 <h1>Tilt angle</h1>
-<div id="status">connecting…</div>
+<div id="bar">
+  <button id="pause">Pause</button>
+  <span id="status">connecting…</span>
+</div>
 <div id="chart"></div>
 
 <script>
@@ -23,10 +28,10 @@ const windowSeconds = 10;
 
 const time = [], accel = [], gyro = [], filtered = [];
 let boardTime = 0;     // seconds, summed from dt_us so it follows the board's clock
-let gyroOffset = null; // gyro_angle drifts without limit; align it with the filter when the page opens
 let received = 0;
 let latest = null;
 let dirty = false;
+let paused = false;
 
 const chart = new uPlot({
   width: window.innerWidth - 32,
@@ -39,10 +44,10 @@ const chart = new uPlot({
   series: [
     {},
     { label: "accel_angle", stroke: "#e67e22" },
-    { label: "gyro_angle (aligned at page load)", stroke: "#3498db" },
+    { label: "gyro_angle (aligned at left edge)", stroke: "#3498db" },
     { label: "angle (filtered)", stroke: "#222", width: 2 },
   ],
-}, [time, accel, gyro, filtered], document.getElementById("chart"));
+}, [[], [], [], []], document.getElementById("chart"));
 
 window.addEventListener("resize", () => {
   chart.setSize({ width: window.innerWidth - 32, height: 420 });
@@ -59,12 +64,10 @@ events.onerror = () => {
 
 events.onmessage = (msg) => {
   const s = JSON.parse(msg.data);
-  if (gyroOffset === null) gyroOffset = s.angle - s.gyro_angle;
-
   boardTime += s.dt_us / 1e6;
   time.push(boardTime);
   accel.push(s.accel_angle);
-  gyro.push(s.gyro_angle + gyroOffset);
+  gyro.push(s.gyro_angle);
   filtered.push(s.angle);
 
   while (time[0] < boardTime - windowSeconds) {
@@ -78,13 +81,36 @@ events.onmessage = (msg) => {
 
 // Samples arrive at 100 Hz; redraw at most once per screen refresh.
 function draw() {
-  if (dirty) {
-    chart.setData([time, accel, gyro, filtered]);
+  if (dirty && !paused) {
+    // gyro_angle drifts without limit. Start it on the filtered angle at the
+    // left edge, so the line shows only the drift within the visible window.
+    const offset = filtered[0] - gyro[0];
+    // Copies, because onmessage keeps changing the arrays; a paused chart
+    // must not change underneath the cursor.
+    chart.setData([time.slice(), accel.slice(), gyro.map(g => g + offset), filtered.slice()]);
     dirty = false;
   }
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);
+
+// While paused, data keeps arriving (and the log keeps recording); only the
+// chart stops updating, so hover and drag-to-zoom work. Double-click unzooms.
+const pauseButton = document.getElementById("pause");
+function togglePause() {
+  paused = !paused;
+  pauseButton.textContent = paused ? "Resume" : "Pause";
+}
+pauseButton.addEventListener("click", () => {
+  togglePause();
+  pauseButton.blur(); // otherwise the space bar would also "click" the focused button
+});
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    togglePause();
+  }
+});
 
 setInterval(() => {
   if (latest && !status.classList.contains("down")) {
