@@ -11,7 +11,13 @@ uint32_t last_iteration_at;  // micros() value when the previous pass started
 void setup() {
     Serial.begin(921600);
     delay(1000);
-    mpu_init();
+    if (!mpu_init()) {
+        while (true) {
+            // repeat so a monitor opened late still sees why it stopped
+            Serial.println("mpu_init failed, halted");
+            delay(1000);
+        }
+    }
 
     last_iteration_at = micros();
     iteration_due_at = last_iteration_at + LOOP_PERIOD_US;

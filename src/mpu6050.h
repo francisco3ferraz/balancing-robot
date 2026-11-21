@@ -12,5 +12,5 @@ struct mpu_raw {
     int16_t gx, gy, gz;
 };
 
-void mpu_init(void);
+bool mpu_init(void);
 bool mpu_read(struct mpu_raw *out);

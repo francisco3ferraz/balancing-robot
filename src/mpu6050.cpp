@@ -88,26 +88,42 @@ static bool write_verify(uint8_t reg, uint8_t value) {
     return true;
 }
 
-void mpu_init(void) {
+bool mpu_init(void) {
     Wire.begin(SDA_PIN, SCL_PIN);
     Wire.setClock(400000);  // MPU-6050 supports 400 kHz fast mode
 
+    uint8_t who_am_i;
+    if (!read_reg(REG_WHO_AM_I, &who_am_i)) {
+        Serial.println("failed to read WHO_AM_I");
+        return false;
+    }
+    if (who_am_i != 0x68) {
+        Serial.printf("WHO_AM_I: expected 0x68, got 0x%02X\n", who_am_i);
+        return false;
+    }
+
     if (!write_verify(REG_PWR_MGMT_1, 0x01)) {
-        // item 6
+        Serial.println("failed to wake sensor");
+        return false;
     }
     delay(100);  // let the chip wake up and its clock settle before using it
 
     if (!write_verify(REG_CONFIG, DLPF_44HZ)) {
-        // item 6
+        Serial.println("failed to set DLPF");
+        return false;
     }
 
     if (!write_verify(REG_ACCEL_CONFIG, ACCEL_FS_2G)) {
-        // item 6
+        Serial.println("failed to set accel full scale");
+        return false;
     }
 
     if (!write_verify(REG_GYRO_CONFIG, GYRO_FS_500DPS)) {
-        // item 6
+        Serial.println("failed to set gyro full scale");
+        return false;
     }
+
+    return true;
 }
 
 bool mpu_read(struct mpu_raw *out) {
