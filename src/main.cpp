@@ -47,7 +47,7 @@ void setup() {
 
 void loop() {
     delay(1000);
-    
+
     /*
     uint8_t who;
     if (read_reg(REG_WHO_AM_I, &who) {
@@ -64,7 +64,7 @@ void loop() {
     }
     
     // bring the full accel xout into one variable
-    uint16_t accel_xout = (uint16_t)buf[0] << 8 | buf[1];
+    int16_t accel_xout = (int16_t)buf[0] << 8 | buf[1];
     Serial.printf("ACCEL_XOUT = %d\n", accel_xout);
 }
 
