@@ -16,6 +16,7 @@ func main() {
 	baud := flag.Int("baud", 921600, "serial port baud rate")
 	replay := flag.String("replay", "", "CSV file to replay telemetry from")
 	logPath := flag.String("log", "", "log file for live mode (default logs/<date>_<time>.csv)")
+	addr := flag.String("addr", "localhost:8080", "address for the web page")
 	flag.Parse()
 
 	if (*port == "") == (*replay == "") {
@@ -55,6 +56,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, "logging to", logFile.Name())
 	}
 
+	// serverCtx is separate from ctx so the server can also be stopped when
+	// a replay simply reaches the end of its file.
+	serverCtx, stopServer := context.WithCancel(ctx)
+	h := newHub()
+	srv, err := startServer(serverCtx, *addr, h)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "web server:", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "streaming on http://%s/events\n", *addr)
+
 	scanner := bufio.NewScanner(src)
 	nextSampleAt := time.Now()
 	samples, bad := 0, 0
@@ -82,7 +94,7 @@ func main() {
 			}
 		}
 
-		fmt.Printf("%+v\n", sample)
+		h.publish(sample)
 	}
 
 	// After Ctrl+C the closed port makes Scan fail; that's expected.
@@ -90,6 +102,15 @@ func main() {
 		fmt.Fprintln(os.Stderr, "read error:", err)
 	}
 	fmt.Fprintf(os.Stderr, "%d samples, %d bad lines\n", samples, bad)
+
+	// Ending the streams first lets Shutdown return quickly. Close is the
+	// fallback for a browser that stopped reading and is stuck mid-write.
+	stopServer()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		srv.Close()
+	}
 
 	if live {
 		// Flush reports any write error since the start, so this is where lost data shows up.
