@@ -1,10 +1,19 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"time"
+
+	"go.bug.st/serial"
 )
 
 var ErrInvalidLine = errors.New("invalid line")
@@ -26,6 +35,115 @@ type Sample struct {
 }
 
 func main() {
+	port := flag.String("port", "", "serial port to read telemetry from")
+	baud := flag.Int("baud", 921600, "serial port baud rate")
+	replay := flag.String("replay", "", "CSV file to replay telemetry from")
+	flag.Parse()
+
+	if (*port == "") == (*replay == "") {
+		fmt.Fprintln(os.Stderr, "specify exactly one of -port or -replay")
+		flag.Usage()
+		os.Exit(2)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	src, err := openSource(*port, *baud, *replay)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer src.Close()
+
+	go func() {
+		<-ctx.Done()
+		src.Close()
+	}()
+
+	var lines lineScanner = bufio.NewScanner(src)
+	if *replay != "" {
+		lines = newPacedScanner(ctx, src)
+	}
+
+	samples, bad := 0, 0
+	for lines.Scan() {
+		sample, err := parseLine(lines.Text())
+		if err != nil {
+			bad++
+			if bad <= maxBadLinesShown {
+				fmt.Fprintf(os.Stderr, "skipping: %v\n", err)
+			}
+			continue
+		}
+		samples++
+		fmt.Printf("%+v\n", sample)
+	}
+
+	if err := lines.Err(); err != nil && ctx.Err() == nil {
+		fmt.Fprintf(os.Stderr, "read error: %v\n", err)
+	}
+	fmt.Fprintf(os.Stderr, "%d samples, %d bad lines\n", samples, bad)
+}
+
+// maxBadLinesShown limits how many skipped lines are printed in full.
+const maxBadLinesShown = 5
+
+func openSource(port string, baud int, replay string) (io.ReadCloser, error) {
+	if replay != "" {
+		f, err := os.Open(replay)
+		if err != nil {
+			return nil, fmt.Errorf("open replay file: %w", err)
+		}
+		return f, nil
+	}
+	p, err := serial.Open(port, &serial.Mode{BaudRate: baud})
+	if err != nil {
+		return nil, fmt.Errorf("open serial port %s: %w", port, err)
+	}
+	return p, nil
+}
+
+type lineScanner interface {
+	Scan() bool
+	Text() string
+	Err() error
+}
+
+type pacedScanner struct {
+	*bufio.Scanner
+	ctx context.Context
+	due time.Time
+}
+
+func newPacedScanner(ctx context.Context, r io.Reader) *pacedScanner {
+	return &pacedScanner{Scanner: bufio.NewScanner(r), ctx: ctx, due: time.Now()}
+}
+
+func (p *pacedScanner) Scan() bool {
+	if !p.Scanner.Scan() {
+		return false
+	}
+	p.due = p.due.Add(lineInterval(p.Text()))
+	t := time.NewTimer(time.Until(p.due))
+	defer t.Stop()
+	select {
+	case <-p.ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+// lineInterval returns the line's dt_us (its last column), or 10 ms for
+// lines without a usable one.
+func lineInterval(line string) time.Duration {
+	last := line[strings.LastIndexByte(line, ',')+1:]
+	us, err := strconv.ParseUint(last, 10, 32)
+	if err != nil {
+		return 10 * time.Millisecond
+	}
+	return time.Duration(us) * time.Microsecond
 }
 
 const numFields = 12
