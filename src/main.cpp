@@ -46,6 +46,8 @@ void setup() {
 }
 
 void loop() {
+    delay(1000);
+    
     /*
     uint8_t who;
     if (read_reg(REG_WHO_AM_I, &who) {
@@ -54,15 +56,16 @@ void loop() {
         Serial.println("read_reg failed");
     }
     */
-    uint8_t buf[2];
 
-    if (read_regs(REG_ACCEL_XOUT_H, buf, 2)) {
-        Serial.printf("ACCEL_X  H=0x%02X  L=0x%02X\n", buf[0], buf[1]);
-    } else {
+    uint8_t buf[2]; // 0 -> H, 1 -> L
+    if (!read_regs(REG_ACCEL_XOUT_H, buf, 2)) {
         Serial.println("read_regs failed");
+        return;
     }
-
-    delay(1000);
+    
+    // bring the full accel xout into one variable
+    uint16_t accel_xout = (uint16_t)buf[0] << 8 | buf[1];
+    Serial.printf("ACCEL_XOUT = %d\n", accel_xout);
 }
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
