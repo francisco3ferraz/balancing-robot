@@ -63,31 +63,38 @@ static int16_t merge_two_bytes(uint8_t high, uint8_t low) {
     return (int16_t)((high << 8) | low);
 }
 
+static bool write_verify(uint8_t reg, uint8_t value) {
+    if (!write_reg(reg, value)) {
+        Serial.printf("write reg 0x%02X failed\n", reg);
+        return false;
+    }
+
+    uint8_t got;
+    if (!read_reg(reg, &got)) {
+        Serial.printf("read reg 0x%02X failed\n", reg);
+        return false;
+    }
+
+    if (got != value) {
+        Serial.printf("reg 0x%02X: wrote 0x%02X, read 0x%02X\n", reg, value, got);
+        return false;
+    }
+
+    Serial.printf("reg 0x%02X = 0x%02X\n", reg, got);
+    return true;
+}
+
 void mpu_init(void) {
     Wire.begin(SDA_PIN, SCL_PIN);
     Wire.setClock(400000);  // MPU-6050 supports 400 kHz fast mode
 
-    if (!write_reg(REG_PWR_MGMT_1, 0x01)) {
-        Serial.println("write_reg failed");
+    if (!write_verify(REG_PWR_MGMT_1, 0x01)) {
+        // item 6
     }
-    delay(100);
+    delay(100);  // let the chip wake up and its clock settle before using it
 
-    uint8_t pwr;
-    if (read_reg(REG_PWR_MGMT_1, &pwr)) {
-        Serial.printf("PWR_MGMT_1 = 0x%02X\n", pwr);  // expect 0x01
-    } else {
-        Serial.println("read_reg failed");
-    }
-
-    if (!write_reg(REG_GYRO_CONFIG, GYRO_FS_500DPS)) {
-        Serial.println("write_reg failed");
-    }
-
-    uint8_t gyro_config;
-    if (read_reg(REG_GYRO_CONFIG, &gyro_config)) {
-        Serial.printf("GYRO_CONFIG = 0x%02X\n", gyro_config);  // expect 0x08
-    } else {
-        Serial.println("read_reg failed");
+    if (!write_verify(REG_GYRO_CONFIG, GYRO_FS_500DPS)) {
+        // item 6
     }
 }
 
