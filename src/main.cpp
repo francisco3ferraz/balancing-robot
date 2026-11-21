@@ -38,6 +38,11 @@ bool write_reg(uint8_t reg, uint8_t value);
 int16_t merge_two_bytes(uint8_t high, uint8_t low);
 float compute_accel_angle(int16_t ay, int16_t az);
 
+#define LOOP_PERIOD_US 10000  // 100 Hz
+
+uint32_t iteration_due_at;   // micros() value when the next pass may start
+uint32_t last_iteration_at;  // micros() value when the previous pass started
+
 void setup() {
     Serial.begin(921600);
     delay(1000);
@@ -54,9 +59,20 @@ void setup() {
     } else {
         Serial.println("read_reg failed");
     }
+
+    last_iteration_at = micros();
+    iteration_due_at = last_iteration_at + LOOP_PERIOD_US;
 }
 
 void loop() {
+    while ((int32_t)(micros() - iteration_due_at) < 0) {
+    }
+    iteration_due_at += LOOP_PERIOD_US;
+
+    uint32_t now = micros();
+    uint32_t dt_us = now - last_iteration_at;  // real time since the previous pass
+    last_iteration_at = now;
+
     uint8_t buf[14]; // registers 0x3B..0x48, each value H then L
     if (!read_regs(REG_ACCEL_XOUT_H, buf, 14)) {
         Serial.println("read_regs failed");
@@ -73,9 +89,11 @@ void loop() {
 
     float accel_angle = compute_accel_angle(accel_yout, accel_zout);
 
-    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f\n",
+    // CSV: ax,ay,az,temp,gx,gy,gz,accel_angle,dt_us
+    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%lu\n",
                   accel_xout, accel_yout, accel_zout, temp_out,
-                  gyro_xout, gyro_yout, gyro_zout, accel_angle);
+                  gyro_xout, gyro_yout, gyro_zout, accel_angle,
+                  (unsigned long)dt_us);
 }
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
