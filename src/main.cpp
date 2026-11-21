@@ -24,6 +24,14 @@
 #define REG_PWR_MGMT_1   0x6B
 #define REG_WHO_AM_I     0x75
 
+// Y offset = (16020 + (−16590)) / 2 ≈ −285
+// Y scale = (16020 − (−16590)) / 2 ≈ 16305
+#define AY_OFFSET  -285
+
+// Z offset = (−20110 + 13000) / 2 ≈ −3555
+// Z Scale = (13000 − (−20110)) / 2 ≈ 16555
+#define AZ_OFFSET -3555
+
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len);
 bool read_reg(uint8_t reg, uint8_t *out);
 bool write_reg(uint8_t reg, uint8_t value);
@@ -72,9 +80,14 @@ void loop() {
     int16_t gyro_yout = merge_two_bytes(buf[10], buf[11]);
     int16_t gyro_zout = merge_two_bytes(buf[12], buf[13]);
 
-    Serial.printf("%d,%d,%d,%d,%d,%d,%d\n",
+    float y = accel_yout - AY_OFFSET;
+    float z = accel_zout - AZ_OFFSET;
+    float deg = atan2(z, y) * (180.0 / M_PI);
+    
+
+    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f\n",
                   accel_xout, accel_yout, accel_zout, temp_out,
-                  gyro_xout, gyro_yout, gyro_zout);
+                  gyro_xout, gyro_yout, gyro_zout, deg);
 }
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
@@ -117,6 +130,10 @@ bool write_reg(uint8_t reg, uint8_t value) {
         return false;
     }
     return true;
+}
+
+void compute_angle() {
+    
 }
 
 int16_t merge_two_bytes(uint8_t high, uint8_t low) {
