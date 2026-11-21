@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"sync"
 )
+
+//go:embed index.html
+var indexHTML []byte
 
 // hub hands each sample to every connected browser.
 type hub struct {
@@ -79,6 +83,10 @@ func (h *hub) serveEvents(w http.ResponseWriter, r *http.Request) {
 // which would otherwise run forever and block Shutdown.
 func startServer(ctx context.Context, addr string, h *hub) (*http.Server, error) {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(indexHTML)
+	})
 	mux.HandleFunc("GET /events", h.serveEvents)
 
 	srv := &http.Server{

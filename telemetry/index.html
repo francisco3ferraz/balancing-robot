@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tilt telemetry</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.min.css">
+<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 16px; background: #fff; color: #222; }
+  h1 { font-size: 1.2rem; margin: 0 0 8px; }
+  #status { font-family: ui-monospace, monospace; font-size: 0.9rem; margin-bottom: 8px; }
+  #status.down { color: #c0392b; }
+</style>
+</head>
+<body>
+<h1>Tilt angle</h1>
+<div id="status">connecting…</div>
+<div id="chart"></div>
+
+<script>
+const windowSeconds = 10;
+
+const time = [], accel = [], gyro = [], filtered = [];
+let boardTime = 0;     // seconds, summed from dt_us so it follows the board's clock
+let gyroOffset = null; // gyro_angle drifts without limit; align it with the filter when the page opens
+let received = 0;
+let latest = null;
+let dirty = false;
+
+const chart = new uPlot({
+  width: window.innerWidth - 32,
+  height: 420,
+  scales: {
+    x: { time: false },
+    y: { range: [-90, 90] }, // fixed, so drift and spikes leave the plot instead of rescaling it
+  },
+  axes: [{ label: "seconds" }, { label: "degrees" }],
+  series: [
+    {},
+    { label: "accel_angle", stroke: "#e67e22" },
+    { label: "gyro_angle (aligned at page load)", stroke: "#3498db" },
+    { label: "angle (filtered)", stroke: "#222", width: 2 },
+  ],
+}, [time, accel, gyro, filtered], document.getElementById("chart"));
+
+window.addEventListener("resize", () => {
+  chart.setSize({ width: window.innerWidth - 32, height: 420 });
+});
+
+const status = document.getElementById("status");
+const events = new EventSource("/events");
+
+events.onopen = () => status.classList.remove("down");
+events.onerror = () => {
+  status.textContent = "disconnected, retrying…";
+  status.classList.add("down");
+};
+
+events.onmessage = (msg) => {
+  const s = JSON.parse(msg.data);
+  if (gyroOffset === null) gyroOffset = s.angle - s.gyro_angle;
+
+  boardTime += s.dt_us / 1e6;
+  time.push(boardTime);
+  accel.push(s.accel_angle);
+  gyro.push(s.gyro_angle + gyroOffset);
+  filtered.push(s.angle);
+
+  while (time[0] < boardTime - windowSeconds) {
+    time.shift(); accel.shift(); gyro.shift(); filtered.shift();
+  }
+
+  received++;
+  latest = s;
+  dirty = true;
+};
+
+// Samples arrive at 100 Hz; redraw at most once per screen refresh.
+function draw() {
+  if (dirty) {
+    chart.setData([time, accel, gyro, filtered]);
+    dirty = false;
+  }
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+setInterval(() => {
+  if (latest && !status.classList.contains("down")) {
+    status.textContent =
+      `${received} samples/s   angle ${latest.angle.toFixed(2)}°   ` +
+      `rate ${latest.gyro_rate.toFixed(1)}°/s   dt ${latest.dt_us} µs`;
+  }
+  received = 0;
+}, 1000);
+</script>
+</body>
+</html>

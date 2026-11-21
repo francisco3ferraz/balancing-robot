@@ -65,7 +65,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "web server:", err)
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "streaming on http://%s/events\n", *addr)
+	fmt.Fprintf(os.Stderr, "open http://%s/\n", *addr)
 
 	scanner := bufio.NewScanner(src)
 	nextSampleAt := time.Now()
