@@ -7,6 +7,7 @@
 #define MPU_ADDR 0x68
 
 // MPU-6050 registers
+#define REG_GYRO_CONFIG  0x1B
 #define REG_ACCEL_XOUT_H 0x3B
 #define REG_ACCEL_XOUT_L 0x3C
 #define REG_ACCEL_YOUT_H 0x3D
@@ -32,7 +33,8 @@
 // Z Scale = (13000 − (−20110)) / 2 ≈ 16555
 #define AZ_OFFSET -3555
 
-#define GYRO_BASE_LSB 131
+#define GYRO_FS_500DPS   0x08   // GYRO_CONFIG: FS_SEL=1 (bits 4:3) -> +/-500 deg/s
+#define GYRO_LSB_PER_DPS 65.5f  // sensitivity at +/-500 deg/s
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len);
 bool read_reg(uint8_t reg, uint8_t *out);
@@ -57,7 +59,18 @@ void setup() {
 
     uint8_t pwr;
     if (read_reg(REG_PWR_MGMT_1, &pwr)) {
-        Serial.printf("PWR_MGMT_1 = 0x%02X\n", pwr);  // expect 0x01, not 0x40
+        Serial.printf("PWR_MGMT_1 = 0x%02X\n", pwr);  // expect 0x01
+    } else {
+        Serial.println("read_reg failed");
+    }
+
+    if (!write_reg(REG_GYRO_CONFIG, GYRO_FS_500DPS)) {
+        Serial.println("write_reg failed");
+    }
+
+    uint8_t gyro_config;
+    if (read_reg(REG_GYRO_CONFIG, &gyro_config)) {
+        Serial.printf("GYRO_CONFIG = 0x%02X\n", gyro_config);  // expect 0x08
     } else {
         Serial.println("read_reg failed");
     }
@@ -90,7 +103,7 @@ void loop() {
     int16_t gyro_zout = merge_two_bytes(buf[12], buf[13]);
 
     float accel_angle = compute_accel_angle(accel_yout, accel_zout);
-    float gyro_rate = -(float)gyro_xout / GYRO_BASE_LSB; // should be inverted or not depended on how the chip is mounted
+    float gyro_rate = -(float)gyro_xout / GYRO_LSB_PER_DPS; // should be inverted or not depended on how the chip is mounted
 
     // CSV: ax,ay,az,temp,gx,gy,gz,accel_angle,dt_us
     Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%lu\n",
