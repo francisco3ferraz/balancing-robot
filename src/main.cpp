@@ -32,6 +32,8 @@
 // Z Scale = (13000 − (−20110)) / 2 ≈ 16555
 #define AZ_OFFSET -3555
 
+#define GYRO_BASE_LSB 131
+
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len);
 bool read_reg(uint8_t reg, uint8_t *out);
 bool write_reg(uint8_t reg, uint8_t value);
@@ -88,12 +90,13 @@ void loop() {
     int16_t gyro_zout = merge_two_bytes(buf[12], buf[13]);
 
     float accel_angle = compute_accel_angle(accel_yout, accel_zout);
+    float gyro_rate = -(float)gyro_xout / GYRO_BASE_LSB; // should be inverted or not depended on how the chip is mounted
 
     // CSV: ax,ay,az,temp,gx,gy,gz,accel_angle,dt_us
-    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%lu\n",
+    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%lu\n",
                   accel_xout, accel_yout, accel_zout, temp_out,
                   gyro_xout, gyro_yout, gyro_zout, accel_angle,
-                  (unsigned long)dt_us);
+                  gyro_rate, (unsigned long)dt_us);
 }
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
