@@ -104,12 +104,16 @@ void loop() {
 
     float accel_angle = compute_accel_angle(accel_yout, accel_zout);
     float gyro_rate = -(float)gyro_xout / GYRO_LSB_PER_DPS; // should be inverted or not depended on how the chip is mounted
+    float dt = dt_us / 1000000.0f; // to seconds
 
-    // CSV: ax,ay,az,temp,gx,gy,gz,accel_angle,dt_us
-    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%lu\n",
+    static float gyro_angle = 0.0f;  // initialised once, keeps its value between passes
+    gyro_angle += gyro_rate * dt;    // updated every pass
+
+    // CSV: ax,ay,az,temp,gx,gy,gz,accel_angle,gyro_rate,gyro_angle,dt_us
+    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%.2f,%lu\n",
                   accel_xout, accel_yout, accel_zout, temp_out,
                   gyro_xout, gyro_yout, gyro_zout, accel_angle,
-                  gyro_rate, (unsigned long)dt_us);
+                  gyro_rate, gyro_angle, (unsigned long)dt_us);
 }
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
