@@ -36,6 +36,10 @@
 #define GYRO_FS_500DPS   0x08   // GYRO_CONFIG: FS_SEL=1 (bits 4:3) -> +/-500 deg/s
 #define GYRO_LSB_PER_DPS 65.5f  // sensitivity at +/-500 deg/s
 
+// Complementary filter: weight on the gyro prediction each pass.
+// Time constant ~ dt * ALPHA / (1 - ALPHA) = ~0.5 s at 100 Hz.
+#define FILTER_ALPHA 0.98f
+
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len);
 bool read_reg(uint8_t reg, uint8_t *out);
 bool write_reg(uint8_t reg, uint8_t value);
@@ -109,11 +113,21 @@ void loop() {
     static float gyro_angle = 0.0f;  // initialised once, keeps its value between passes
     gyro_angle += gyro_rate * dt;    // updated every pass
 
-    // CSV: ax,ay,az,temp,gx,gy,gz,accel_angle,gyro_rate,gyro_angle,dt_us
-    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%.2f,%lu\n",
+    static float angle = 0.0f;
+    static bool first_pass = true;
+    if (first_pass) {
+        // Start from the accelerometer so we don't converge from 0 for ~2 s.
+        angle = accel_angle;
+        first_pass = false;
+    } else {
+        angle = FILTER_ALPHA * (angle + gyro_rate * dt) + (1.0f - FILTER_ALPHA) * accel_angle;
+    }
+
+    // CSV: ax,ay,az,temp,gx,gy,gz,accel_angle,gyro_rate,gyro_angle,angle,dt_us
+    Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%lu\n",
                   accel_xout, accel_yout, accel_zout, temp_out,
                   gyro_xout, gyro_yout, gyro_zout, accel_angle,
-                  gyro_rate, gyro_angle, (unsigned long)dt_us);
+                  gyro_rate, gyro_angle, angle, (unsigned long)dt_us);
 }
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
