@@ -55,8 +55,6 @@ void setup() {
 }
 
 void loop() {
-    delay(1000);
-
     /*
     uint8_t who;
     if (read_reg(REG_WHO_AM_I, &who) {
@@ -82,7 +80,7 @@ void loop() {
 
     float y = accel_yout - AY_OFFSET;
     float z = accel_zout - AZ_OFFSET;
-    float deg = atan2(z, y) * (180.0 / M_PI);
+    float deg = atan2f(z, y) * (180.0f / M_PI);
     
 
     Serial.printf("%d,%d,%d,%d,%d,%d,%d,%.2f\n",
