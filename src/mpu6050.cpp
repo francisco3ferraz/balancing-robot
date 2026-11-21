@@ -9,7 +9,9 @@
 #define MPU_ADDR 0x68
 
 // MPU-6050 registers
+#define REG_CONFIG       0x1A
 #define REG_GYRO_CONFIG  0x1B
+#define REG_ACCEL_CONFIG 0x1C
 #define REG_ACCEL_XOUT_H 0x3B
 #define REG_ACCEL_XOUT_L 0x3C
 #define REG_ACCEL_YOUT_H 0x3D
@@ -28,6 +30,8 @@
 #define REG_WHO_AM_I     0x75
 
 #define GYRO_FS_500DPS 0x08  // GYRO_CONFIG: FS_SEL=1 (bits 4:3) -> +/-500 deg/s
+#define ACCEL_FS_2G    0x00  // ACCEL_CONFIG: AFS_SEL=0 (bits 4:3), self-test off -> +/-2 g
+#define DLPF_44HZ      0x03  // CONFIG: DLPF_CFG=3 (bits 2:0) -> accel 44 Hz, gyro 42 Hz, below 50 Hz Nyquist
 
 static bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
     Wire.beginTransmission(MPU_ADDR);
@@ -92,6 +96,14 @@ void mpu_init(void) {
         // item 6
     }
     delay(100);  // let the chip wake up and its clock settle before using it
+
+    if (!write_verify(REG_CONFIG, DLPF_44HZ)) {
+        // item 6
+    }
+
+    if (!write_verify(REG_ACCEL_CONFIG, ACCEL_FS_2G)) {
+        // item 6
+    }
 
     if (!write_verify(REG_GYRO_CONFIG, GYRO_FS_500DPS)) {
         // item 6
