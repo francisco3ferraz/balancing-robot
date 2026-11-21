@@ -27,6 +27,7 @@
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len);
 bool read_reg(uint8_t reg, uint8_t *out);
 bool write_reg(uint8_t reg, uint8_t value);
+int16_t merge_two_bytes(uint8_t high, uint8_t low);
 
 void setup() {
     Serial.begin(115200);
@@ -57,15 +58,23 @@ void loop() {
     }
     */
 
-    uint8_t buf[2]; // 0 -> H, 1 -> L
-    if (!read_regs(REG_ACCEL_XOUT_H, buf, 2)) {
+    uint8_t buf[14]; // registers 0x3B..0x48, each value H then L
+    if (!read_regs(REG_ACCEL_XOUT_H, buf, 14)) {
         Serial.println("read_regs failed");
         return;
     }
-    
-    // bring the full accel xout into one variable
-    int16_t accel_xout = (int16_t)buf[0] << 8 | buf[1];
-    Serial.printf("ACCEL_XOUT = %d\n", accel_xout);
+
+    int16_t accel_xout = merge_two_bytes(buf[0], buf[1]);
+    int16_t accel_yout = merge_two_bytes(buf[2], buf[3]);
+    int16_t accel_zout = merge_two_bytes(buf[4], buf[5]);
+    int16_t temp_out = merge_two_bytes(buf[6], buf[7]);
+    int16_t gyro_xout = merge_two_bytes(buf[8], buf[9]);
+    int16_t gyro_yout = merge_two_bytes(buf[10], buf[11]);
+    int16_t gyro_zout = merge_two_bytes(buf[12], buf[13]);
+
+    Serial.printf("%d,%d,%d,%d,%d,%d,%d\n",
+                  accel_xout, accel_yout, accel_zout, temp_out,
+                  gyro_xout, gyro_yout, gyro_zout);
 }
 
 bool read_regs(uint8_t reg, uint8_t *buf, uint8_t len) {
@@ -108,4 +117,8 @@ bool write_reg(uint8_t reg, uint8_t value) {
         return false;
     }
     return true;
+}
+
+int16_t merge_two_bytes(uint8_t high, uint8_t low) {
+    return (int16_t)((high << 8) | low);
 }
